@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+venv/
+.venv/
+
+# MLflow
+mlruns/
+mlflow-artifacts/
+mlflow.db
+
+# Artifacts
+artifacts/
+
+# Data (large CSV — tracked via LFS or added separately if needed)
+data/*.csv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Reports
+monitoring/reports/
