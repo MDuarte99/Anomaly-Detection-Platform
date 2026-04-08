@@ -18,6 +18,8 @@ mlflow.db
 artifacts/
 
 # Data (large CSV — tracked via LFS or added separately if needed)
+# Exception: creditcard.csv is tracked via LFS
+!data/creditcard.csv
 data/*.csv
 
 # IDE
