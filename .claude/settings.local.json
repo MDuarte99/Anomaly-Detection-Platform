@@ -3,7 +3,16 @@
     "allow": [
       "Bash(pip install:*)",
       "Bash(python model/train.py)",
-      "Bash(python -m pytest tests/test_api.py -v)"
+      "Bash(python -m pytest tests/test_api.py -v)",
+      "Bash(find . -name *.csv)",
+      "Bash(git check-attr:*)",
+      "Bash(git lfs:*)",
+      "Bash(git add:*)",
+      "Bash(git check-ignore:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(python3:*)",
+      "Bash(python:*)"
     ]
   }
 }

@@ -1,18 +1,19 @@
 """FastAPI REST API for real-time fraud detection predictions."""
 
-import os
 import time
 import json
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 from collections import deque
+from typing import Optional
 
 import joblib
 import numpy as np
 import pandas as pd
 import psutil
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
 logging.basicConfig(level=logging.INFO)
@@ -32,43 +33,31 @@ prediction_count = 0
 fraud_count = 0
 
 
+# =========================
+# INPUT SCHEMAS
+# =========================
+
 class TransactionFeatures(BaseModel):
-    """Single transaction with PCA-transformed features."""
+    """Full transaction with PCA features (production format)."""
 
-    V1: float
-    V2: float
-    V3: float
-    V4: float
-    V5: float
-    V6: float
-    V7: float
-    V8: float
-    V9: float
-    V10: float
-    V11: float
-    V12: float
-    V13: float
-    V14: float
-    V15: float
-    V16: float
-    V17: float
-    V18: float
-    V19: float
-    V20: float
-    V21: float
-    V22: float
-    V23: float
-    V24: float
-    V25: float
-    V26: float
-    V27: float
-    V28: float
+    V1: float; V2: float; V3: float; V4: float; V5: float; V6: float
+    V7: float; V8: float; V9: float; V10: float; V11: float; V12: float
+    V13: float; V14: float; V15: float; V16: float; V17: float; V18: float
+    V19: float; V20: float; V21: float; V22: float; V23: float; V24: float
+    V25: float; V26: float; V27: float; V28: float
 
+
+class SimpleFeatures(BaseModel):
+    """Simplified input for demo purposes."""
+    features: list[float] = Field(..., min_items=28, max_items=28)
+
+
+# =========================
+# OUTPUT SCHEMAS
+# =========================
 
 class PredictionResponse(BaseModel):
-    """Prediction output schema."""
-
-    transaction_id: str | None = None
+    transaction_id: Optional[str] = None
     is_fraud: bool
     confidence: float
     anomaly_score: float
@@ -77,8 +66,6 @@ class PredictionResponse(BaseModel):
 
 
 class HealthResponse(BaseModel):
-    """Health check response."""
-
     status: str
     model_loaded: bool
     model_type: str
@@ -91,8 +78,6 @@ class HealthResponse(BaseModel):
 
 
 class MetricsResponse(BaseModel):
-    """Monitoring metrics response."""
-
     total_requests: int
     total_predictions: int
     total_frauds_detected: int
@@ -107,8 +92,11 @@ class MetricsResponse(BaseModel):
 START_TIME = time.time()
 
 
+# =========================
+# MODEL LOADING
+# =========================
+
 def load_model_artifacts():
-    """Load model, scaler, and metadata from artifacts directory."""
     global model, scaler, metadata
 
     scaler_path = ARTIFACTS_DIR / "scaler.joblib"
@@ -131,11 +119,14 @@ def load_model_artifacts():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load model on startup."""
     load_model_artifacts()
     logger.info("API ready")
     yield
 
+
+# =========================
+# APP INIT
+# =========================
 
 app = FastAPI(
     title="Fraud Detection API",
@@ -145,28 +136,20 @@ app = FastAPI(
 )
 
 
-@app.get("/health", response_model=HealthResponse)
-async def health_check():
-    """Health check endpoint with model and system status."""
-    uptime = time.time() - START_TIME
-    avg_lat = sum(request_latencies) / len(request_latencies) if request_latencies else 0
+# =========================
+# ROOT → DOCS
+# =========================
 
-    return HealthResponse(
-        status="healthy" if model and scaler else "degraded",
-        model_loaded=model is not None,
-        model_type=metadata["model_type"] if metadata else "unknown",
-        uptime_seconds=round(uptime, 1),
-        memory_mb=round(psutil.Process().memory_info().rss / 1024 / 1024, 1),
-        total_requests=request_count,
-        total_predictions=prediction_count,
-        total_frauds_detected=fraud_count,
-        avg_latency_ms=round(avg_lat, 2),
-    )
+@app.get("/")
+def root():
+    return RedirectResponse(url="/docs")
 
 
-@app.post("/predict", response_model=PredictionResponse)
-async def predict(transaction: TransactionFeatures, transaction_id: str = None):
-    """Predict whether a transaction is fraudulent."""
+# =========================
+# CORE PREDICTION LOGIC
+# =========================
+
+def run_prediction(transaction: TransactionFeatures, transaction_id: Optional[str] = None):
     global request_count, prediction_count, fraud_count
 
     start = time.time()
@@ -204,13 +187,44 @@ async def predict(transaction: TransactionFeatures, transaction_id: str = None):
     )
 
 
+# =========================
+# ENDPOINTS
+# =========================
+
+@app.post("/predict", response_model=PredictionResponse)
+async def predict(transaction: TransactionFeatures, transaction_id: Optional[str] = None):
+    return run_prediction(transaction, transaction_id)
+
+
+@app.post("/predict_simple", response_model=PredictionResponse)
+async def predict_simple(data: SimpleFeatures):
+    transaction = TransactionFeatures(
+        **{f"V{i+1}": v for i, v in enumerate(data.features)}
+    )
+    return run_prediction(transaction)
+
+
+@app.get("/health", response_model=HealthResponse)
+async def health_check():
+    uptime = time.time() - START_TIME
+    avg_lat = sum(request_latencies) / len(request_latencies) if request_latencies else 0
+
+    return HealthResponse(
+        status="healthy" if model and scaler else "degraded",
+        model_loaded=model is not None,
+        model_type=metadata["model_type"] if metadata else "unknown",
+        uptime_seconds=round(uptime, 1),
+        memory_mb=round(psutil.Process().memory_info().rss / 1024 / 1024, 1),
+        total_requests=request_count,
+        total_predictions=prediction_count,
+        total_frauds_detected=fraud_count,
+        avg_latency_ms=round(avg_lat, 2),
+    )
+
+
 @app.get("/metrics", response_model=MetricsResponse)
 async def get_metrics():
-    """Prometheus-style metrics endpoint."""
     latencies = sorted(request_latencies) if request_latencies else [0]
-    n = len(latencies)
-
-    contamination = metadata.get("contamination", 0.0017)
 
     return MetricsResponse(
         total_requests=request_count,
@@ -221,19 +235,12 @@ async def get_metrics():
         p95_latency_ms=round(float(np.percentile(latencies, 95)), 2),
         p99_latency_ms=round(float(np.percentile(latencies, 99)), 2),
         model_type=metadata["model_type"] if metadata else "IsolationForest",
-        contamination=contamination,
+        contamination=metadata.get("contamination", 0.0017),
     )
 
 
 @app.get("/model/info")
 async def model_info():
-    """Return model metadata and training metrics."""
     if not metadata:
         return {"error": "Model not loaded"}
     return metadata
-
-
-if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run(app, host="0.0.0.0", port=8000)
