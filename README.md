@@ -8,6 +8,16 @@
 Production-ready MLOps platform for real-time credit card fraud detection. Demonstrates a complete ML lifecycle — training, deployment, monitoring, and explainability — in a single, self-contained repo.
 
 ---
+🎥 Live Demo
+
+This video shows the system running in a real-world scenario, including:
+
+Real-time fraud predictions via FastAPI
+MLflow experiment tracking and model versioning
+Monitoring endpoints (/health, /metrics)
+End-to-end pipeline behavior
+
+👉 Watch the demo:https://youtu.be/h3cSqaQMyvk
 
 ## 📊 Dataset
 
